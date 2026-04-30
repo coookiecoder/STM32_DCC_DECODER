@@ -15,6 +15,6 @@ build_firmware:
     - cargo build --target thumbv7em-none-eabihf
   artifacts:
     paths:
-      - target/thumbv7em-none-eabihf/release/STM32_DCC_ENCODER
-      - target/thumbv7em-none-eabihf/debug/STM32_DCC_ENCODER
+      - target/thumbv7em-none-eabihf/release/STM32_DCC_DECODER
+      - target/thumbv7em-none-eabihf/debug/STM32_DCC_DECODER
     expire_in: 1 week
