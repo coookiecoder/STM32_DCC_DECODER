@@ -1,0 +1,20 @@
+stages:
+  - build
+
+image: rust:latest
+
+# This runs before every single job in the pipeline
+before_script:
+  - rustup target add thumbv7em-none-eabihf
+
+# Compiles your firmware in release mode.
+build_firmware:
+  stage: build
+  script:
+    - cargo build --release --target thumbv7em-none-eabihf
+    - cargo build --target thumbv7em-none-eabihf
+  artifacts:
+    paths:
+      - target/thumbv7em-none-eabihf/release/STM32_DCC_ENCODER
+      - target/thumbv7em-none-eabihf/debug/STM32_DCC_ENCODER
+    expire_in: 1 week
