@@ -97,7 +97,15 @@ fn main() -> ! {
             }
 
             if byte >= DECODED_DATA_SIZE {
-                send_dcc_data(&decoded_data, &mut pico_output, &mut spi);
+                let mut size:usize = DECODED_DATA_SIZE - 1;
+
+                while decoded_data[size] == 0 {
+                    size -= 1;
+                }
+
+                pico_output.set_high(); //tell pico we are read to send data
+                spi.write(&decoded_data[0..size]).ok();
+                pico_output.set_low(); //tell pico we sent all the data
 
                 decoded_data = [0u8; DECODED_DATA_SIZE];
                 byte = 0;
@@ -125,16 +133,4 @@ fn get_dcc_data<P: InputPin>(pin: &P, dwt: &DWT) -> bool {
     let delta_us = delta_cycles / 84;
 
     return delta_us < 100;
-}
-
-fn send_dcc_data<P: OutputPin, SPI: stm32f4xx_hal::spi::Instance>(data: &[u8; DECODED_DATA_SIZE], pin: &mut P, spi: &mut Spi<SPI>) -> () {
-    let mut size:usize = DECODED_DATA_SIZE;
-
-    while data[size - 1] == 0 {
-        size -= 1;
-    }
-
-    pin.set_high().ok();
-    spi.write(&data[0..size]).ok();
-    pin.set_low().ok();
 }
