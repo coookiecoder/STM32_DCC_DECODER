@@ -18,7 +18,7 @@ use hal::rcc::Config;
 use hal::hal_02::digital::v2::InputPin;
 use hal::hal_02::digital::v2::OutputPin;
 
-use hal::spi::Spi;
+use hal::spi::SpiSlave;
 use hal::spi::Mode;
 use hal::spi::Phase;
 use hal::spi::Polarity;
@@ -62,10 +62,11 @@ fn main() -> ! {
     let spi_clock = _gpio_a.pa5.into_alternate();
     let master_in_slave_out = _gpio_a.pa6.into_alternate();
     let master_out_slave_in = _gpio_a.pa7.into_alternate();
+    let negative_slave_select = _gpio_a.pa4.into_alternate();
 
     let mode = Mode {polarity: Polarity::IdleLow, phase: Phase::CaptureOnFirstTransition};
 
-    let mut spi = Spi::new(_dp.SPI1, (Some(spi_clock), Some(master_in_slave_out), Some(master_out_slave_in)), mode, 0.Hz(), &mut rcc);
+    let mut spi = SpiSlave::new(_dp.SPI1, (Some(spi_clock), Some(master_in_slave_out), Some(master_out_slave_in), Some(negative_slave_select)), mode, &mut rcc);
 
     let mut bits:usize = 0;
     let mut byte:usize = 0;
