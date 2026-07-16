@@ -56,7 +56,9 @@ fn main() -> ! {
     let _gpio_d = _dp.GPIOD.split(&mut rcc);
     let _gpio_e = _dp.GPIOE.split(&mut rcc);
 
-    let dcc_input = _gpio_a.pa1.into_pull_up_input();
+    let mut led_output = _gpio_c.pc13.into_push_pull_output();
+
+    let dcc_input = _gpio_a.pa1.into_input();
     let mut pico_output = _gpio_a.pa2.into_push_pull_output();
 
     let spi_clock = _gpio_a.pa5.into_alternate();
@@ -73,6 +75,11 @@ fn main() -> ! {
 
     let mut decoded_data = [0u8; DECODED_DATA_SIZE];
     let mut preamble_size:usize = 0;
+
+    led_output.set_low();
+    delay_ms(&_cp.DWT, 1000);
+    led_output.set_high();
+    delay_ms(&_cp.DWT, 1000);
 
     loop {
         while get_dcc_data(&dcc_input, &_cp.DWT) {
@@ -105,14 +112,18 @@ fn main() -> ! {
                 }
 
                 pico_output.set_high(); //tell pico we are read to send data
-                spi.write(&decoded_data[0..size]).ok();
+                led_output.set_low();
+                spi.write(&decoded_data).ok();
                 pico_output.set_low(); //tell pico we sent all the data
+                led_output.set_high();
 
                 decoded_data = [0u8; DECODED_DATA_SIZE];
                 byte = 0;
                 preamble_size = 0;
             }
         }
+
+        preamble_size = 0;
     }
 }
 
@@ -134,4 +145,14 @@ fn get_dcc_data<P: InputPin>(pin: &P, dwt: &DWT) -> bool {
     let delta_us = delta_cycles / 84;
 
     return delta_us < 100;
+}
+
+fn delay_ms(dwt: &DWT, time_ms: u32) {
+    let start_cycles = dwt.cyccnt.read();
+
+    let until = time_ms.wrapping_mul(84_000);
+
+    while dwt.cyccnt.read().wrapping_sub(start_cycles) < until {
+        cortex_m::asm::nop();
+    }
 }
