@@ -62,7 +62,7 @@ fn main() -> ! {
     let dcc_input = _gpio_a.pa1.into_input();
     let mut pico_output = _gpio_a.pa2.into_push_pull_output();
 
-    let (_pwm_mgr, (c1, c2, c3, _)) = _dp.TIM4.pwm_hz(50.kHz(), &mut rcc);
+    let (_pwm_mgr, (c1, c2, c3, _)) = _dp.TIM4.pwm_hz(20.kHz(), &mut rcc);
     let mut motor_output = c1.with(_gpio_b.pb6);
     let mut front_light = c2.with(_gpio_b.pb7);
     let mut rear_light = c3.with(_gpio_b.pb8);
