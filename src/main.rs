@@ -11,6 +11,7 @@ use hal::pac;
 
 use hal::prelude::_stm32f4xx_hal_rcc_RccExt;
 use hal::prelude::_stm32f4xx_hal_gpio_GpioExt;
+use hal::prelude::_stm32f4xx_hal_timer_PwmExt;
 use hal::prelude::_fugit_RateExtU32;
 
 use hal::rcc::Config;
@@ -61,6 +62,15 @@ fn main() -> ! {
     let dcc_input = _gpio_a.pa1.into_input();
     let mut pico_output = _gpio_a.pa2.into_push_pull_output();
 
+    let (_pwm_mgr, (c1, c2, c3, _)) = _dp.TIM4.pwm_hz(50.kHz(), &mut rcc);
+    let mut motor_output = c1.with(_gpio_b.pb6);
+    let mut front_light = c2.with(_gpio_b.pb7);
+    let mut rear_light = c3.with(_gpio_b.pb8);
+
+    motor_output.set_duty(0);
+    front_light.set_duty(0);
+    rear_light.set_duty(0);
+
     let spi_clock = _gpio_a.pa5.into_alternate();
     let master_in_slave_out = _gpio_a.pa6.into_alternate();
     let master_out_slave_in = _gpio_a.pa7.into_alternate();
@@ -73,12 +83,17 @@ fn main() -> ! {
     let mut bits:usize = 0;
     let mut byte:usize = 0;
 
-    let mut decoded_data = [0u8; DECODED_DATA_SIZE];
+    let mut decoded_data: [u8; DECODED_DATA_SIZE] = [0u8; DECODED_DATA_SIZE];
+    let mut data_from_pi_0: [u8; DECODED_DATA_SIZE] = [0u8; DECODED_DATA_SIZE];
     let mut preamble_size:usize = 0;
 
     led_output.set_low();
+    front_light.set_duty(50000);
+    rear_light.set_duty(50000);
     delay_ms(&_cp.DWT, 1000);
     led_output.set_high();
+    front_light.set_duty(0);
+    rear_light.set_duty(0);
     delay_ms(&_cp.DWT, 1000);
 
     loop {
@@ -105,17 +120,17 @@ fn main() -> ! {
             }
 
             if byte >= DECODED_DATA_SIZE {
-                let mut size:usize = DECODED_DATA_SIZE - 1;
 
-                while decoded_data[size] == 0 {
-                    size -= 1;
-                }
 
-                pico_output.set_high(); //tell pico we are read to send data
+                pico_output.set_high(); //tell pi 0 we are read to send data
                 led_output.set_low();
-                spi.write(&decoded_data).ok();
-                pico_output.set_low(); //tell pico we sent all the data
+                spi.transfer(&mut data_from_pi_0, &decoded_data).ok();
+                pico_output.set_low(); //tell pi 0 we sent all the data
                 led_output.set_high();
+
+                set_pwm_state(&mut motor_output, u16::from_be_bytes([data_from_pi_0[0], data_from_pi_0[1]]));
+                set_pwm_state(&mut front_light, u16::from_be_bytes([data_from_pi_0[7], data_from_pi_0[8]]));
+                set_pwm_state(&mut rear_light, u16::from_be_bytes([data_from_pi_0[15], data_from_pi_0[16]]));
 
                 decoded_data = [0u8; DECODED_DATA_SIZE];
                 byte = 0;
@@ -154,5 +169,16 @@ fn delay_ms(dwt: &DWT, time_ms: u32) {
 
     while dwt.cyccnt.read().wrapping_sub(start_cycles) < until {
         cortex_m::asm::nop();
+    }
+}
+
+use stm32f4xx_hal::hal_02::PwmPin;
+
+fn set_pwm_state(pwn_pin: &mut impl PwmPin<Duty = u16>, duty_cycle: u16) {
+    if duty_cycle > 0 {
+        pwn_pin.set_duty(duty_cycle);
+        pwn_pin.enable();
+    } else {
+        pwn_pin.disable();
     }
 }
