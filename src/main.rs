@@ -88,12 +88,12 @@ fn main() -> ! {
     let mut preamble_size:usize = 0;
 
     led_output.set_low();
-    front_light.set_duty(50000);
-    rear_light.set_duty(50000);
+    set_pwm_state(&mut front_light, 20000);
+    set_pwm_state(&mut rear_light, 20000);
     delay_ms(&_cp.DWT, 1000);
     led_output.set_high();
-    front_light.set_duty(0);
-    rear_light.set_duty(0);
+    set_pwm_state(&mut front_light, 0);
+    set_pwm_state(&mut rear_light, 0);
     delay_ms(&_cp.DWT, 1000);
 
     loop {
