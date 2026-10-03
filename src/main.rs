@@ -62,12 +62,30 @@ fn main() -> ! {
     let dcc_input = _gpio_a.pa1.into_input();
     let mut pico_output = _gpio_a.pa2.into_push_pull_output();
 
-    let (_pwm_mgr, (c1, c2, c3, _)) = _dp.TIM4.pwm_hz(20.kHz(), &mut rcc);
-    let mut motor_output = c1.with(_gpio_b.pb6);
-    let mut front_light = c2.with(_gpio_b.pb7);
-    let mut rear_light = c3.with(_gpio_b.pb8);
+    let (_pwm_mgr_t1, (c1, c2, c3, c4)) = _dp.TIM1.pwm_hz(20.kHz(), &mut rcc);
+    let mut gate_s1 = c1.with(_gpio_a.pa8);
+    let mut gate_s2 = c2.with(_gpio_a.pa9);
+    let mut gate_s3 = c3.with(_gpio_a.pa10);
+    let mut gate_s4 = c4.with(_gpio_a.pa11);
+
+    gate_s1.set_duty(0);
+    gate_s2.set_duty(0);
+    gate_s3.set_duty(0);
+    gate_s4.set_duty(0);
+
+    let (_pwm_mgr_t2, (c1, _, _, _)) = _dp.TIM2.pwm_hz(20.kHz(), &mut rcc);
+    let mut motor_output = c1.with(_gpio_a.pa15.into_push_pull_output());
 
     motor_output.set_duty(0);
+
+    let (_pwm_mgr_t4, (c1, c2, c3, c4)) = _dp.TIM4.pwm_hz(20.kHz(), &mut rcc);
+    let mut pwm_1 = c1.with(_gpio_b.pb6);
+    let mut pwm_2 = c2.with(_gpio_b.pb7);
+    let mut front_light = c3.with(_gpio_b.pb8);
+    let mut rear_light = c4.with(_gpio_b.pb9);
+
+    pwm_1.set_duty(0);
+    pwm_2.set_duty(0);
     front_light.set_duty(0);
     rear_light.set_duty(0);
 
@@ -94,7 +112,6 @@ fn main() -> ! {
     led_output.set_high();
     set_pwm_state(&mut front_light, 0);
     set_pwm_state(&mut rear_light, 0);
-    delay_ms(&_cp.DWT, 1000);
 
     loop {
         while get_dcc_data(&dcc_input, &_cp.DWT) {
@@ -128,9 +145,25 @@ fn main() -> ! {
                 pico_output.set_low(); //tell pi 0 we sent all the data
                 led_output.set_high();
 
-                set_pwm_state(&mut motor_output, u16::from_be_bytes([data_from_pi_0[0], data_from_pi_0[1]]));
-                set_pwm_state(&mut front_light, u16::from_be_bytes([data_from_pi_0[7], data_from_pi_0[8]]));
-                set_pwm_state(&mut rear_light, u16::from_be_bytes([data_from_pi_0[15], data_from_pi_0[16]]));
+                set_pwm_state(&mut gate_s1, u16::from_be_bytes([data_from_pi_0[0], data_from_pi_0[1]]));
+                set_pwm_state(&mut gate_s2, u16::from_be_bytes([data_from_pi_0[2], data_from_pi_0[3]]));
+                set_pwm_state(&mut gate_s3, u16::from_be_bytes([data_from_pi_0[4], data_from_pi_0[5]]));
+                set_pwm_state(&mut gate_s4, u16::from_be_bytes([data_from_pi_0[6], data_from_pi_0[7]]));
+
+                set_pwm_state(&mut motor_output, u16::from_be_bytes([data_from_pi_0[8], data_from_pi_0[9]]));
+                //byte 10 -- 11
+                //byte 12 -- 13
+                //byte 14 -- 15
+
+                //byte 16 -- 17
+                //byte 18 -- 19
+                //byte 20 -- 21
+                //byte 22 -- 23
+
+                set_pwm_state(&mut pwm_1, u16::from_be_bytes([data_from_pi_0[24], data_from_pi_0[25]]));
+                set_pwm_state(&mut pwm_2, u16::from_be_bytes([data_from_pi_0[26], data_from_pi_0[27]]));
+                set_pwm_state(&mut front_light, u16::from_be_bytes([data_from_pi_0[28], data_from_pi_0[29]]));
+                set_pwm_state(&mut rear_light, u16::from_be_bytes([data_from_pi_0[30], data_from_pi_0[31]]));
 
                 decoded_data = [0u8; DECODED_DATA_SIZE];
                 byte = 0;
@@ -181,4 +214,54 @@ fn set_pwm_state(pwn_pin: &mut impl PwmPin<Duty = u16>, duty_cycle: u16) {
     } else {
         pwn_pin.disable();
     }
+}
+
+/// Updates PWM pin states and light outputs from a 64-byte big-endian command payload.
+///
+/// Parses 16-bit big-endian unsigned integers from the payload slice `data_from_pi_0`
+/// and updates the duty cycle or state of the corresponding hardware peripherals.
+///
+/// # Payload Mapping
+///
+/// | Byte Range | Target Peripheral | Description |
+/// | :--- | :--- | :--- |
+/// | `[0..1]` | `gate_s1` | Gate driver channel 1 PWM signal |
+/// | `[2..3]` | `gate_s2` | Gate driver channel 2 PWM signal |
+/// | `[4..5]` | `gate_s3` | Gate driver channel 3 PWM signal |
+/// | `[6..7]` | `gate_s4` | Gate driver channel 4 PWM signal |
+/// | `[8..9]` | `motor_output` | Main motor driver PWM duty cycle |
+/// | `[10..11]` | *(Unused)* | Unused for now |
+/// | `[12..13]` | *(Unused)* | Unused for now |
+/// | `[14..15]` | *(Unused)* | Unused for now |
+/// | `[16..17]` | *(Unused)* | Unused for now |
+/// | `[18..19]` | *(Unused)* | Unused for now |
+/// | `[20..21]` | *(Unused)* | Unused for now |
+/// | `[22..24]` | *(Unused)* | Unused for now |
+/// | `[24..25]` | `pwm_1` | Auxiliary PWM channel 1 |
+/// | `[26..27]` | `pwm_2` | Auxiliary PWM channel 2 |
+/// | `[28..29]` | `front_light` | Front light intensity PWM |
+/// | `[30..31]` | `rear_light` | Rear light intensity PWM |
+/// | `[32..33]` | *(Unused)* | Unused for now |
+/// | `[34..35]` | *(Unused)* | Unused for now |
+/// | `[36..37]` | *(Unused)* | Unused for now |
+/// | `[38..39]` | *(Unused)* | Unused for now |
+/// | `[40..41]` | *(Unused)* | Unused for now |
+/// | `[42..43]` | *(Unused)* | Unused for now |
+/// | `[44..45]` | *(Unused)* | Unused for now |
+/// | `[46..47]` | *(Unused)* | Unused for now |
+/// | `[48..49]` | *(Unused)* | Unused for now |
+/// | `[50..51]` | *(Unused)* | Unused for now |
+/// | `[52..53]` | *(Unused)* | Unused for now |
+/// | `[54..55]` | *(Unused)* | Unused for now |
+/// | `[56..57]` | *(Unused)* | Unused for now |
+/// | `[58..59]` | *(Unused)* | Unused for now |
+/// | `[60..61]` | *(Unused)* | Unused for now |
+/// | `[62..63]` | *(Unused)* | Unused for now |
+///
+/// # Panics
+///
+/// Panics if `data_from_pi_0` contains fewer than 64 bytes (index out of bounds).
+#[allow(dead_code)]
+fn spi_help() -> () {
+
 }
